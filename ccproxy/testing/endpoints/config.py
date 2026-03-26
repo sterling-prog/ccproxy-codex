@@ -22,7 +22,6 @@ from ccproxy.llms.streaming.accumulators import (
 from ccproxy.plugins.claude_api import factory as claude_api_factory
 from ccproxy.plugins.claude_sdk.plugin import factory as claude_sdk_factory
 from ccproxy.plugins.codex import factory as codex_factory
-from ccproxy.plugins.copilot import factory as copilot_factory
 
 from .models import EndpointTest
 from .tools import ANTHROPIC_TOOLS, CODEX_TOOLS, OPENAI_TOOLS
@@ -630,22 +629,6 @@ class FormatConfig:
 
 
 PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
-    "copilot": ProviderConfig(
-        name="copilot",
-        base_path="/copilot/v1",
-        model="gpt-4o",
-        supported_formats=[
-            "chat_completions",
-            "responses",
-            "messages",
-            "chat_completions_tools",
-            "messages_tools",
-            "chat_completions_thinking",
-            "chat_completions_structured",
-            "responses_structured",
-        ],
-        description_prefix="Copilot",
-    ),
     "claude": ProviderConfig(
         name="claude",
         base_path="/claude/v1",
@@ -698,7 +681,6 @@ PROVIDER_TOOL_ACCUMULATORS: dict[str, type[StreamAccumulator] | None] = {
     "codex": codex_factory.tool_accumulator_class,
     "claude": claude_api_factory.tool_accumulator_class,
     "claude_sdk": claude_sdk_factory.tool_accumulator_class,
-    "copilot": copilot_factory.tool_accumulator_class,
 }
 
 

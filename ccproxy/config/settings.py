@@ -25,7 +25,6 @@ _CONFIG_MISSING_LOGGED = False
 # Default plugins enabled when no config file exists
 DEFAULT_ENABLED_PLUGINS = [
     "codex",
-    "copilot",
     "claude_api",
     "claude_sdk",
     "oauth_codex",
