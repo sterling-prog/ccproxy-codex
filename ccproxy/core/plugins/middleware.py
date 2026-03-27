@@ -5,19 +5,14 @@ and ensuring proper ordering across core and plugin middleware.
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from fastapi import FastAPI
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from ccproxy.core.logging import TraceBoundLogger, get_logger
 
 from .declaration import MiddlewareLayer, MiddlewareSpec
-
-
-if TYPE_CHECKING:
-    from starlette.middleware.base import BaseHTTPMiddleware
-else:
-    from starlette.middleware.base import BaseHTTPMiddleware
 
 
 logger: TraceBoundLogger = get_logger()
