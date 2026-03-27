@@ -11,6 +11,10 @@ PASS=0
 FAIL=0
 SKIP=0
 
+# Use a private temp directory to prevent symlink TOCTOU attacks on /tmp files.
+SMOKE_TMP=$(mktemp -d)
+trap 'rm -rf "$SMOKE_TMP"' EXIT
+
 pass() { echo "  PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "  FAIL: $1 — $2"; FAIL=$((FAIL + 1)); }
 skip() { echo "  SKIP: $1 — $2"; SKIP=$((SKIP + 1)); }
@@ -20,9 +24,9 @@ header() { echo ""; echo "=== $1 ==="; }
 # ---------------------------------------------------------------------------
 header "1. GET /health → 200 + auth status"
 
-HTTP_CODE=$(curl -s -o /tmp/smoke_health.json -w "%{http_code}" "$BASE_URL/health" 2>/dev/null || echo "000")
+HTTP_CODE=$(curl -s -o $SMOKE_TMP/smoke_health.json -w "%{http_code}" "$BASE_URL/health" 2>/dev/null || echo "000")
 if [ "$HTTP_CODE" = "200" ]; then
-    if grep -q '"status"' /tmp/smoke_health.json 2>/dev/null; then
+    if grep -q '"status"' $SMOKE_TMP/smoke_health.json 2>/dev/null; then
         pass "/health returns 200 with status field"
     else
         fail "/health" "200 but missing status field"
@@ -34,7 +38,7 @@ fi
 # ---------------------------------------------------------------------------
 header "2. GET /ready → 200"
 
-HTTP_CODE=$(curl -s -o /tmp/smoke_ready.json -w "%{http_code}" "$BASE_URL/ready" 2>/dev/null || echo "000")
+HTTP_CODE=$(curl -s -o $SMOKE_TMP/smoke_ready.json -w "%{http_code}" "$BASE_URL/ready" 2>/dev/null || echo "000")
 if [ "$HTTP_CODE" = "200" ]; then
     pass "/ready returns 200"
 else
@@ -44,12 +48,12 @@ fi
 # ---------------------------------------------------------------------------
 header "3. GET /v1/models → model list with correct id field"
 
-HTTP_CODE=$(curl -s -o /tmp/smoke_models.json -w "%{http_code}" "$BASE_URL/v1/models" 2>/dev/null || echo "000")
+HTTP_CODE=$(curl -s -o $SMOKE_TMP/smoke_models.json -w "%{http_code}" "$BASE_URL/v1/models" 2>/dev/null || echo "000")
 if [ "$HTTP_CODE" = "200" ]; then
     # Check that response has data array with model objects containing id field
     MODEL_COUNT=$(python3 -c "
 import json, sys
-with open('/tmp/smoke_models.json') as f:
+with open('$SMOKE_TMP/smoke_models.json') as f:
     data = json.load(f)
 models = data.get('data', [])
 # Verify each model has an id field matching known Codex models
@@ -71,7 +75,7 @@ fi
 # ---------------------------------------------------------------------------
 header "4. POST /v1/chat/completions → non-streaming request"
 
-HTTP_CODE=$(curl -s -o /tmp/smoke_chat.json -w "%{http_code}" \
+HTTP_CODE=$(curl -s -o $SMOKE_TMP/smoke_chat.json -w "%{http_code}" \
     -X POST "$BASE_URL/v1/chat/completions" \
     -H "Content-Type: application/json" \
     -d '{"model":"gpt-5.4","messages":[{"role":"user","content":"Say hello"}],"stream":false}' \
@@ -85,14 +89,14 @@ elif [ "$HTTP_CODE" = "000" ]; then
     fail "non-streaming chat completion" "connection failed or timed out"
 else
     # Any response with correlation ID is acceptable for testing error normalization
-    HAS_REQUEST_ID=$(grep -c "x-request-id\|request_id\|X-Request-Id" /tmp/smoke_chat.json 2>/dev/null || echo "0")
+    HAS_REQUEST_ID=$(grep -c "x-request-id\|request_id\|X-Request-Id" $SMOKE_TMP/smoke_chat.json 2>/dev/null || echo "0")
     skip "non-streaming chat completion" "got HTTP $HTTP_CODE (may need auth)"
 fi
 
 # ---------------------------------------------------------------------------
 header "5. POST /v1/chat/completions → streaming request (SSE)"
 
-HTTP_CODE=$(curl -s -o /tmp/smoke_stream.txt -w "%{http_code}" \
+HTTP_CODE=$(curl -s -o $SMOKE_TMP/smoke_stream.txt -w "%{http_code}" \
     -X POST "$BASE_URL/v1/chat/completions" \
     -H "Content-Type: application/json" \
     -H "Accept: text/event-stream" \
@@ -100,7 +104,7 @@ HTTP_CODE=$(curl -s -o /tmp/smoke_stream.txt -w "%{http_code}" \
     --max-time 120 2>/dev/null || echo "000")
 
 if [ "$HTTP_CODE" = "200" ]; then
-    if grep -q "data:" /tmp/smoke_stream.txt 2>/dev/null; then
+    if grep -q "data:" $SMOKE_TMP/smoke_stream.txt 2>/dev/null; then
         pass "streaming chat completion returns SSE data"
     else
         pass "streaming chat completion returns 200"
@@ -119,7 +123,7 @@ header "6. POST /v1/chat/completions → long-running request (>60s timeout test
 if [ "${SMOKE_LONG_RUNNING:-0}" = "1" ]; then
     # Send a request that should take >60s (large generation task)
     echo "  INFO: running live long-running test (may take >60s)..."
-    HTTP_CODE=$(curl -s -o /tmp/smoke_long.json -w "%{http_code}" \
+    HTTP_CODE=$(curl -s -o $SMOKE_TMP/smoke_long.json -w "%{http_code}" \
         -X POST "$BASE_URL/v1/chat/completions" \
         -H "Content-Type: application/json" \
         -d '{"model":"gpt-5.4","messages":[{"role":"user","content":"Write a 5000-word detailed essay on the history of computing from 1940 to 2000. Include every major milestone."}],"max_tokens":4000}' \
@@ -150,18 +154,18 @@ fi
 header "7. POST /v1/chat/completions → error case with correlation ID"
 
 # Send a request with an invalid model to trigger an error
-RESPONSE=$(curl -s -D /tmp/smoke_err_headers.txt -o /tmp/smoke_err.json \
+RESPONSE=$(curl -s -D $SMOKE_TMP/smoke_err_headers.txt -o $SMOKE_TMP/smoke_err.json \
     -X POST "$BASE_URL/v1/chat/completions" \
     -H "Content-Type: application/json" \
     -d '{"model":"nonexistent-model-xyz","messages":[{"role":"user","content":"test"}]}' \
     --max-time 30 2>/dev/null)
 
 # Check that response headers include x-request-id (correlation ID)
-if grep -qi "x-request-id" /tmp/smoke_err_headers.txt 2>/dev/null; then
+if grep -qi "x-request-id" $SMOKE_TMP/smoke_err_headers.txt 2>/dev/null; then
     pass "error response includes x-request-id correlation header"
 else
     # Also check response body for request_id
-    if grep -q "request_id" /tmp/smoke_err.json 2>/dev/null; then
+    if grep -q "request_id" $SMOKE_TMP/smoke_err.json 2>/dev/null; then
         pass "error response includes request_id in body"
     else
         fail "error correlation ID" "no x-request-id header or request_id in body"
@@ -171,10 +175,10 @@ fi
 # ---------------------------------------------------------------------------
 header "8. GET /metrics → request count, latency, error rate"
 
-HTTP_CODE=$(curl -s -o /tmp/smoke_metrics.txt -w "%{http_code}" "$BASE_URL/metrics" 2>/dev/null || echo "000")
+HTTP_CODE=$(curl -s -o $SMOKE_TMP/smoke_metrics.txt -w "%{http_code}" "$BASE_URL/metrics" 2>/dev/null || echo "000")
 if [ "$HTTP_CODE" = "200" ]; then
-    HAS_REQUESTS=$(grep -c "ccproxy_requests_total" /tmp/smoke_metrics.txt 2>/dev/null || echo "0")
-    HAS_LATENCY=$(grep -c "ccproxy_request_duration\|duration\|latency" /tmp/smoke_metrics.txt 2>/dev/null || echo "0")
+    HAS_REQUESTS=$(grep -c "ccproxy_requests_total" $SMOKE_TMP/smoke_metrics.txt 2>/dev/null || echo "0")
+    HAS_LATENCY=$(grep -c "ccproxy_request_duration\|duration\|latency" $SMOKE_TMP/smoke_metrics.txt 2>/dev/null || echo "0")
     if [ "$HAS_REQUESTS" -gt 0 ]; then
         pass "/metrics exposes request count"
     else
@@ -193,7 +197,7 @@ fi
 header "Rate limit headers check"
 
 # Check that responses include rate limit headers
-if grep -qi "x-ratelimit-limit" /tmp/smoke_err_headers.txt 2>/dev/null; then
+if grep -qi "x-ratelimit-limit" $SMOKE_TMP/smoke_err_headers.txt 2>/dev/null; then
     pass "responses include X-RateLimit-Limit header"
 else
     skip "rate limit headers" "X-RateLimit-Limit header not found in error response"
@@ -205,10 +209,7 @@ echo "========================================="
 echo "  Results: $PASS passed, $FAIL failed, $SKIP skipped"
 echo "========================================="
 
-# Cleanup
-rm -f /tmp/smoke_health.json /tmp/smoke_ready.json /tmp/smoke_models.json \
-      /tmp/smoke_chat.json /tmp/smoke_stream.txt /tmp/smoke_err.json \
-      /tmp/smoke_err_headers.txt /tmp/smoke_metrics.txt
+# Cleanup handled by EXIT trap (rm -rf "$SMOKE_TMP")
 
 if [ "$FAIL" -gt 0 ]; then
     exit 1

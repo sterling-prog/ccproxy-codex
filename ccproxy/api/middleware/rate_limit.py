@@ -4,6 +4,7 @@ Implements a simple sliding-window rate limiter. Default: 60 requests/minute
 as required by P124 spec (matches current codex-proxy behavior).
 """
 
+import asyncio
 import time
 from collections import deque
 
@@ -21,6 +22,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     Applies a global rate limit across all incoming requests.
     Health/metrics endpoints are excluded to avoid interfering with monitoring.
+
+    An asyncio.Lock guards the check-and-append so concurrent coroutines
+    cannot both pass the capacity check before either records its timestamp.
     """
 
     EXCLUDED_PREFIXES = ("/health", "/ready", "/metrics")
@@ -30,6 +34,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
         self._timestamps: deque[float] = deque()
+        self._lock = asyncio.Lock()
 
     async def dispatch(self, request: Request, call_next) -> Response:
         # Skip rate limiting for health/metrics endpoints
@@ -37,42 +42,46 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if any(path.startswith(p) for p in self.EXCLUDED_PREFIXES):
             return await call_next(request)
 
-        now = time.monotonic()
+        async with self._lock:
+            now = time.monotonic()
 
-        # Evict expired entries
-        cutoff = now - self.window_seconds
-        while self._timestamps and self._timestamps[0] < cutoff:
-            self._timestamps.popleft()
+            # Evict expired entries
+            cutoff = now - self.window_seconds
+            while self._timestamps and self._timestamps[0] < cutoff:
+                self._timestamps.popleft()
 
-        if len(self._timestamps) >= self.max_requests:
-            retry_after = int(self._timestamps[0] + self.window_seconds - now) + 1
-            request_id = getattr(getattr(request, "state", None), "request_id", "unknown")
-            logger.warning(
-                "rate_limit_exceeded",
-                request_id=request_id,
-                method=request.method,
-                path=path,
-                current_count=len(self._timestamps),
-                max_requests=self.max_requests,
-                window_seconds=self.window_seconds,
-            )
-            return JSONResponse(
-                status_code=429,
-                content={
-                    "error": {
-                        "message": f"Rate limit exceeded: {self.max_requests} requests per {self.window_seconds}s",
-                        "type": "rate_limit_error",
-                        "code": "rate_limit_exceeded",
-                    }
-                },
-                headers={"Retry-After": str(retry_after)},
-            )
+            if len(self._timestamps) >= self.max_requests:
+                retry_after = int(self._timestamps[0] + self.window_seconds - now) + 1
+                request_id = getattr(getattr(request, "state", None), "request_id", "unknown")
+                logger.warning(
+                    "rate_limit_exceeded",
+                    request_id=request_id,
+                    method=request.method,
+                    path=path,
+                    current_count=len(self._timestamps),
+                    max_requests=self.max_requests,
+                    window_seconds=self.window_seconds,
+                )
+                return JSONResponse(
+                    status_code=429,
+                    content={
+                        "error": {
+                            "message": f"Rate limit exceeded: {self.max_requests} requests per {self.window_seconds}s",
+                            "type": "rate_limit_error",
+                            "code": "rate_limit_exceeded",
+                        }
+                    },
+                    headers={"Retry-After": str(retry_after)},
+                )
 
-        self._timestamps.append(now)
+            self._timestamps.append(now)
+
         response = await call_next(request)
 
-        # Add rate limit headers
-        remaining = self.max_requests - len(self._timestamps)
+        # Add rate limit headers (snapshot remaining under lock to avoid tearing)
+        async with self._lock:
+            remaining = self.max_requests - len(self._timestamps)
+
         response.headers["X-RateLimit-Limit"] = str(self.max_requests)
         response.headers["X-RateLimit-Remaining"] = str(max(0, remaining))
         response.headers["X-RateLimit-Reset"] = str(int(now + self.window_seconds))
