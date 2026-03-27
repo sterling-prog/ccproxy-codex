@@ -5,19 +5,14 @@ and ensuring proper ordering across core and plugin middleware.
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from fastapi import FastAPI
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from ccproxy.core.logging import TraceBoundLogger, get_logger
 
 from .declaration import MiddlewareLayer, MiddlewareSpec
-
-
-if TYPE_CHECKING:
-    from starlette.middleware.base import BaseHTTPMiddleware
-else:
-    from starlette.middleware.base import BaseHTTPMiddleware
 
 
 logger: TraceBoundLogger = get_logger()
@@ -140,6 +135,20 @@ class MiddlewareManager:
                     exc_info=e,
                     category="middleware",
                 )
+                # Security-layer middleware failing to register is fatal — a
+                # missing rate limiter or auth middleware would leave the proxy
+                # unprotected. Re-raise so startup fails loudly rather than
+                # silently serving unguarded traffic.
+                if spec.priority <= MiddlewareLayer.SECURITY:
+                    # Suppress the exception chain (from None) so that kwargs
+                    # passed to add_middleware() — which may include secrets or
+                    # tokens — are not propagated up the call stack via
+                    # __cause__. The original exception is already captured in
+                    # the structured log above with exc_info.
+                    raise RuntimeError(
+                        f"Security middleware {spec.middleware_class.__name__!r} "
+                        "failed to register (see startup log for details)"
+                    ) from None
 
         # Log aggregated success
         if applied_middleware:
@@ -224,6 +233,16 @@ def setup_default_middleware(manager: MiddlewareManager) -> None:
     #     AccessLogMiddleware, priority=MiddlewareLayer.OBSERVABILITY
     # )
     #
+    # Rate limiting at security layer (60 req/min per P124 spec)
+    from ccproxy.api.middleware.rate_limit import RateLimitMiddleware
+
+    manager.add_core_middleware(
+        RateLimitMiddleware,
+        priority=MiddlewareLayer.SECURITY,
+        max_requests=60,
+        window_seconds=60,
+    )
+
     # Normalize headers: strip unsafe and ensure server header
     manager.add_core_middleware(
         NormalizeHeadersMiddleware,  # type: ignore[arg-type]

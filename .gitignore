@@ -166,5 +166,9 @@ ccproxy/static/dashboard/
 .lazy.lua
 .ccproxy.toml
 
+# P124: deployment config (not tracked in git)
+config.toml
+
 make
 run
+.ccproxy.toml

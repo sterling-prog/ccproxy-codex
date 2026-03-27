@@ -43,12 +43,44 @@
     "max_output_tokens": 128000,
     "max_input_tokens": 272000
   },
+  "gpt-5.4": {
+    "max_output_tokens": 128000,
+    "max_input_tokens": 272000
+  },
+  "gpt-5.4-mini": {
+    "max_output_tokens": 128000,
+    "max_input_tokens": 272000
+  },
+  "gpt-5.3-codex": {
+    "max_output_tokens": 128000,
+    "max_input_tokens": 272000
+  },
+  "gpt-5.3-codex-spark": {
+    "max_output_tokens": 64000,
+    "max_input_tokens": 128000
+  },
+  "gpt-5.2-codex": {
+    "max_output_tokens": 128000,
+    "max_input_tokens": 272000
+  },
+  "gpt-5.2": {
+    "max_output_tokens": 128000,
+    "max_input_tokens": 272000
+  },
+  "gpt-5.1-codex-max": {
+    "max_output_tokens": 128000,
+    "max_input_tokens": 272000
+  },
+  "gpt-5.1-codex-mini": {
+    "max_output_tokens": 128000,
+    "max_input_tokens": 272000
+  },
   "_metadata": {
-    "source": "generated from ~/.cache/ccproxy/model_pricing.json",
+    "source": "P124 spec + ~/.cache/ccproxy/model_pricing.json",
     "claude_models_count": 9,
-    "codex_models_count": 2,
-    "total_models": 11,
+    "codex_models_count": 10,
+    "total_models": 19,
     "generated_for": "max_tokens plugin enforce mode support",
-    "note": "Flat structure format, uses simple model names for compatibility with request handling"
+    "note": "All 8 OpenClaw gateway Codex models included. gpt-5.3-codex-spark capped at 128K context, all others 272K per P124 spec invariant."
   }
 }

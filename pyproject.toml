@@ -116,23 +116,16 @@ ccproxy-perm = "ccproxy.cli.commands.permission:main"
 
 [project.entry-points."ccproxy.plugins"]
 access_log = "ccproxy.plugins.access_log.plugin:factory"
-analytics = "ccproxy.plugins.analytics.plugin:factory"
 claude_api = "ccproxy.plugins.claude_api.plugin:factory"
 claude_sdk = "ccproxy.plugins.claude_sdk.plugin:factory"
 codex = "ccproxy.plugins.codex.plugin:factory"
 command_replay = "ccproxy.plugins.command_replay.plugin:factory"
-copilot = "ccproxy.plugins.copilot.plugin:factory"
-dashboard = "ccproxy.plugins.dashboard.plugin:factory"
-docker = "ccproxy.plugins.docker.plugin:factory"
-duckdb_storage = "ccproxy.plugins.duckdb_storage.plugin:factory"
+max_tokens = "ccproxy.plugins.max_tokens.plugin:factory"
 metrics = "ccproxy.plugins.metrics.plugin:factory"
 oauth_claude = "ccproxy.plugins.oauth_claude.plugin:factory"
 oauth_codex = "ccproxy.plugins.oauth_codex.plugin:factory"
 permissions = "ccproxy.plugins.permissions.plugin:factory"
-pricing = "ccproxy.plugins.pricing.plugin:factory"
 request_tracer = "ccproxy.plugins.request_tracer.plugin:factory"
-max_tokens = "ccproxy.plugins.max_tokens.plugin:factory"
-credential_balancer = "ccproxy.plugins.credential_balancer.plugin:factory"
 
 [tool.coverage.run]
 source = ["ccproxy/*", "tests/*"]

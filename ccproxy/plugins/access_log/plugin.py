@@ -7,7 +7,6 @@ from ccproxy.core.plugins import (
     SystemPluginRuntime,
 )
 from ccproxy.core.plugins.hooks import HookRegistry
-from ccproxy.plugins.analytics.ingest import AnalyticsIngestService
 from ccproxy.services.container import ServiceContainer
 
 from .config import AccessLogConfig
@@ -51,13 +50,17 @@ class AccessLogRuntime(SystemPluginRuntime):
 
         hook_registry.register(self.hook)
 
-        # Try to wire analytics ingest service if available
+        # Try to wire analytics ingest service if available (optional dependency)
         try:
+            from ccproxy.plugins.analytics.ingest import AnalyticsIngestService  # noqa: PLC0415
+
             registry = self.context.get(ServiceContainer)
             self.hook.ingest_service = registry.get_service(AnalyticsIngestService)
             if not self.hook.ingest_service:
                 # optional service
                 logger.debug("access_log_analytics_service_not_found")
+        except (ImportError, ModuleNotFoundError):
+            logger.debug("access_log_analytics_plugin_not_available")
         except Exception as e:
             logger.warning(
                 "access_log_ingest_service_connect_failed", error=str(e), exc_info=e

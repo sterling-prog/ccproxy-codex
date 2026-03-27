@@ -237,7 +237,8 @@ class CodexFactory(BaseProviderPluginFactory):
     auth_manager_name = "oauth_codex"
     credentials_manager_class = CodexTokenManager
     routers = [
-        RouterSpec(router=codex_router, prefix="/codex"),
+        # Empty prefix: routes mount at /v1/... directly (P124 spec — gateway speaks /v1/chat/completions)
+        RouterSpec(router=codex_router, prefix=""),
     ]
     dependencies = ["oauth_codex"]
     optional_requires = ["pricing"]
