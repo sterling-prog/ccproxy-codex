@@ -135,6 +135,14 @@ class MiddlewareManager:
                     exc_info=e,
                     category="middleware",
                 )
+                # Security-layer middleware failing to register is fatal — a
+                # missing rate limiter or auth middleware would leave the proxy
+                # unprotected. Re-raise so startup fails loudly rather than
+                # silently serving unguarded traffic.
+                if spec.priority <= MiddlewareLayer.SECURITY:
+                    raise RuntimeError(
+                        f"Security middleware {spec.middleware_class.__name__!r} failed to register: {e}"
+                    ) from e
 
         # Log aggregated success
         if applied_middleware:
