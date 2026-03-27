@@ -7,6 +7,7 @@ module.exports = {
     {
       name: 'ccproxy-codex',
       script: '/home/gpu1/ccproxy-codex/.venv/bin/ccproxy',
+      interpreter: 'none',
       args: 'serve --config /home/gpu1/ccproxy-codex/config.toml',
       cwd: '/home/gpu1/ccproxy-codex',
       kill_timeout: 15000,
