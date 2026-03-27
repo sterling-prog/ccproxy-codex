@@ -114,9 +114,37 @@ fi
 # ---------------------------------------------------------------------------
 header "6. POST /v1/chat/completions → long-running request (>60s timeout test)"
 
-# This test is intentionally skipped in automated runs — it requires live auth
-# and a prompt that takes >60s to complete. Uncomment for manual testing.
-skip "long-running request" "requires live Codex OAuth and >60s prompt — run manually"
+# Default: verify timeout config is correctly set (request_timeout=900s, queue_timeout=120s).
+# Full live test: set SMOKE_LONG_RUNNING=1 to send an actual long-running request.
+if [ "${SMOKE_LONG_RUNNING:-0}" = "1" ]; then
+    # Send a request that should take >60s (large generation task)
+    echo "  INFO: running live long-running test (may take >60s)..."
+    HTTP_CODE=$(curl -s -o /tmp/smoke_long.json -w "%{http_code}" \
+        -X POST "$BASE_URL/v1/chat/completions" \
+        -H "Content-Type: application/json" \
+        -d '{"model":"gpt-5.4","messages":[{"role":"user","content":"Write a 5000-word detailed essay on the history of computing from 1940 to 2000. Include every major milestone."}],"max_tokens":4000}' \
+        --max-time 950 2>/dev/null || echo "000")
+    if [ "$HTTP_CODE" = "200" ]; then
+        pass "long-running request (>60s) completed without timeout"
+    else
+        fail "long-running request" "expected 200, got $HTTP_CODE"
+    fi
+else
+    # Verify proxy timeout config is set correctly per P124 spec invariants:
+    # request_timeout=900s, queue_timeout=120s, max_concurrent=5
+    CONFIG_FILE="$(dirname "$0")/../config.toml"
+    if [ -f "$CONFIG_FILE" ]; then
+        TIMEOUT_VAL=$(grep -E "^timeout\s*=" "$CONFIG_FILE" | head -1 | grep -o '[0-9]*')
+        QUEUE_TIMEOUT=$(grep -E "^queue_timeout\s*=" "$CONFIG_FILE" | head -1 | grep -o '[0-9]*')
+        if [ "$TIMEOUT_VAL" = "900" ] && [ "$QUEUE_TIMEOUT" = "120" ]; then
+            pass "long-running timeout config verified: request_timeout=${TIMEOUT_VAL}s, queue_timeout=${QUEUE_TIMEOUT}s (live test: SMOKE_LONG_RUNNING=1)"
+        else
+            fail "long-running timeout config" "expected timeout=900 queue_timeout=120, got timeout=${TIMEOUT_VAL} queue_timeout=${QUEUE_TIMEOUT}"
+        fi
+    else
+        skip "long-running request" "config.toml not found at $CONFIG_FILE — run with SMOKE_LONG_RUNNING=1 for live test"
+    fi
+fi
 
 # ---------------------------------------------------------------------------
 header "7. POST /v1/chat/completions → error case with correlation ID"
