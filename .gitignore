@@ -171,3 +171,4 @@ config.toml
 
 make
 run
+.ccproxy.toml

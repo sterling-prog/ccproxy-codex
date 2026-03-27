@@ -91,6 +91,16 @@ async def readiness_probe(response: Response) -> dict[str, Any]:
 
 
 @router.get(
+    "/ready",
+    response_class=HealthJSONResponse,
+    responses=_health_responses("Readiness probe (alias)"),
+)
+async def ready_alias(response: Response) -> dict[str, Any]:
+    """Readiness probe alias at /ready for convenience."""
+    return await readiness_probe(response)
+
+
+@router.get(
     "/health",
     response_class=HealthJSONResponse,
     responses=_health_responses("Detailed health diagnostics"),

@@ -224,6 +224,16 @@ def setup_default_middleware(manager: MiddlewareManager) -> None:
     #     AccessLogMiddleware, priority=MiddlewareLayer.OBSERVABILITY
     # )
     #
+    # Rate limiting at security layer (60 req/min per P124 spec)
+    from ccproxy.api.middleware.rate_limit import RateLimitMiddleware
+
+    manager.add_core_middleware(
+        RateLimitMiddleware,
+        priority=MiddlewareLayer.SECURITY,
+        max_requests=60,
+        window_seconds=60,
+    )
+
     # Normalize headers: strip unsafe and ensure server header
     manager.add_core_middleware(
         NormalizeHeadersMiddleware,  # type: ignore[arg-type]
