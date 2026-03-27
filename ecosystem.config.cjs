@@ -10,7 +10,7 @@ module.exports = {
       interpreter: 'none',
       args: 'serve --config /home/gpu1/ccproxy-codex/config.toml',
       cwd: '/home/gpu1/ccproxy-codex',
-      kill_timeout: 15000,
+      kill_timeout: 950000,
       wait_ready: false,
       listen_timeout: 30000,
       autorestart: true,
