@@ -140,9 +140,15 @@ class MiddlewareManager:
                 # unprotected. Re-raise so startup fails loudly rather than
                 # silently serving unguarded traffic.
                 if spec.priority <= MiddlewareLayer.SECURITY:
+                    # Suppress the exception chain (from None) so that kwargs
+                    # passed to add_middleware() — which may include secrets or
+                    # tokens — are not propagated up the call stack via
+                    # __cause__. The original exception is already captured in
+                    # the structured log above with exc_info.
                     raise RuntimeError(
-                        f"Security middleware {spec.middleware_class.__name__!r} failed to register: {e}"
-                    ) from e
+                        f"Security middleware {spec.middleware_class.__name__!r} "
+                        "failed to register (see startup log for details)"
+                    ) from None
 
         # Log aggregated success
         if applied_middleware:
